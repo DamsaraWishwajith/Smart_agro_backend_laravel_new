@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 
 use App\Models\Plant;
+use App\Models\User;
 use App\Models\IrrigationSchedule;
 use Illuminate\Support\Facades\Validator;
 
@@ -15,11 +16,11 @@ class PlantController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'user_id' => 'nullable|numeric|exists:users,id',
-            'crop_name' => 'required|string|max:255',
+            'crop_name' => 'nullable|string|max:255',
             'planted_days' => 'nullable|numeric',
-            'temperature' => 'required|numeric',
-            'plants_count' => 'required|numeric',
-            'water_time_seconds' => 'required|numeric',
+            'temperature' => 'nullable|numeric',
+            'plants_count' => 'nullable|numeric',
+            'water_time_seconds' => 'nullable|numeric',
             'water_need_ml' => 'nullable|numeric',
         ]);
 
@@ -35,11 +36,11 @@ class PlantController extends Controller
         $user = null;
 
         if ($request->has('user_id')) {
-            $user = \App\Models\User::find($request->user_id);
+            $user = User::find($request->user_id);
         }
 
         if (!$user) {
-            $user = $request->user() ?? \App\Models\User::first();
+            $user = $request->user() ?? User::first();
         }
 
         if (!$user) {
@@ -50,7 +51,7 @@ class PlantController extends Controller
         }
 
         // Create or Update the plant record associated with the user
-        $plant = \App\Models\Plant::updateOrCreate(
+        $plant = Plant::updateOrCreate(
             ['user_id' => $user->id],
             [
                 'crop_name' => $request->crop_name,
@@ -134,6 +135,127 @@ class PlantController extends Controller
         return response()->json([
             'success' => true,
             'data' => $schedules
+        ]);
+    }
+
+    public function deleteSchedule(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'schedule_id' => 'required|numeric|exists:irrigation_schedules,id',
+            'user_id'     => 'required|numeric|exists:users,id',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        $schedule = IrrigationSchedule::where('id', $request->schedule_id)
+            ->where('user_id', $request->user_id)
+            ->first();
+
+        if (!$schedule) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Schedule not found or access denied.'
+            ], 404);
+        }
+
+        $schedule->delete();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Schedule deleted successfully.'
+        ]);
+    }
+
+    public function updateSchedule(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'schedule_id' => 'required|numeric|exists:irrigation_schedules,id',
+            'user_id'     => 'required|numeric|exists:users,id',
+            'on_time'     => 'required|string',
+            'off_time'    => 'required|string',
+            'days'        => 'required|array',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors'  => $validator->errors()
+            ], 422);
+        }
+
+        $schedule = IrrigationSchedule::where('id', $request->schedule_id)
+            ->where('user_id', $request->user_id)
+            ->first();
+
+        if (!$schedule) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Schedule not found or access denied.'
+            ], 404);
+        }
+
+        $schedule->update([
+            'on_time'  => $request->on_time,
+            'off_time' => $request->off_time,
+            'days'     => $request->days,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Schedule updated successfully.',
+            'data'    => $schedule->fresh()
+        ]);
+    }
+
+    public function getPlantByDevice(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'device_id' => 'required|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Validation error',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        $user = User::where('device_id', $request->device_id)->first();
+        if (!$user) {
+            $user = User::first();
+            if ($user) {
+                $user->device_id = $request->device_id;
+                $user->save();
+            }
+        }
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No user found for this device ID and no users exist.'
+            ], 404);
+        }
+
+        $plant = $user->plants()->first();
+
+        if (!$plant) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No plant details found for this device.'
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'data' => $plant
         ]);
     }
 }

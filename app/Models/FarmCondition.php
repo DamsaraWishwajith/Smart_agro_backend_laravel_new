@@ -10,5 +10,6 @@ class FarmCondition extends Model
         'device_id',
         'temp',
         'humidity',
+        'soil_moisture',
     ];
 }

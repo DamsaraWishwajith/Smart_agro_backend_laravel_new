@@ -47,4 +47,59 @@ class UserController extends Controller
             'data' => $user
         ]);
     }
+
+    /**
+     * Get the status of a specific user.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getStatus(Request $request)
+    {
+        $request->validate([
+            'user_id' => 'required|integer|exists:users,id',
+        ]);
+
+        $user = User::find($request->user_id);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Status retrieved successfully',
+            'status' => $user->status,
+        ]);
+    }
+    /**
+     * Get a user and all their data by email.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getUserByEmail(Request $request)
+    {
+        $request->validate([
+            'user_email' => 'required|email',
+        ]);
+
+        $user = User::with([
+                'plants',
+                'motors',
+                'irrigationSchedules',
+                'messages',
+            ])
+            ->where('email', $request->user_email)
+            ->first();
+
+        if (!$user) {
+            return response()->json([
+                'success' => false,
+                'message' => 'No user found with that email address.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => 'User data retrieved successfully.',
+            'data' => $user,
+        ]);
+    }
 }

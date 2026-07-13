@@ -14,4 +14,9 @@ class Motor extends Model
         'exhaust',
         'light',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }

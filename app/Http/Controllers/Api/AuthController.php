@@ -30,6 +30,7 @@ class AuthController extends Controller
             'password' => Hash::make($request->password),
             'address' => $request->address,
             'device_id' => $request->device_id,
+            'status' => 'pending',
         ]);
 
         $token = $user->createToken('auth_token')->plainTextToken;
@@ -37,6 +38,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Registration success',
             'user' => $user,
+            'status' => $user->status,
             'access_token' => $token,
             'token_type' => 'Bearer',
         ]);
@@ -61,13 +63,41 @@ class AuthController extends Controller
             ], 401);
         }
 
+        if ($user->status !== 'approved') {
+            return response()->json([
+                'message' => 'Your account is pending approval by the administrator.'
+            ], 403);
+        }
+
         $token = $user->createToken('auth_token')->plainTextToken;
 
         return response()->json([
             'message' => 'Login success',
             'user' => $user,
+            'status' => $user->status,
             'access_token' => $token,
             'token_type' => 'Bearer',
+        ]);
+    }
+
+    public function saveFcmToken(Request $request)
+    {
+        $validator = Validator::make($request->all(), [
+            'user_id' => 'required|integer|exists:users,id',
+            'fcm_token' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json($validator->errors(), 422);
+        }
+
+        $user = User::find($request->user_id);
+        $user->fcm_token = $request->fcm_token;
+        $user->save();
+
+        return response()->json([
+            'success' => true,
+            'message' => 'FCM token saved successfully'
         ]);
     }
 }

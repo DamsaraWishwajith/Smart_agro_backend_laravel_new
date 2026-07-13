@@ -17,4 +17,9 @@ class IrrigationSchedule extends Model
     protected $casts = [
         'days' => 'array',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 }
