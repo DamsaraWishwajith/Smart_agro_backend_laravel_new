@@ -1,59 +1,91 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# SmartAgro: Intelligent IoT Greenhouse & Farm Automation System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+[![Laravel](https://img.shields.io/badge/Laravel-11.x-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)](https://laravel.com)
+[![Flutter](https://img.shields.io/badge/Flutter-3.x-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
+[![ESP32](https://img.shields.io/badge/ESP32-Microcontroller-000000?style=for-the-badge&logo=espressif&logoColor=white)](https://espressif.com)
+[![MySQL](https://img.shields.io/badge/MySQL-Database-4479A1?style=for-the-badge&logo=mysql&logoColor=white)](https://mysql.com)
 
-## About Laravel
+**SmartAgro** is an end-to-end precision agriculture and greenhouse automation ecosystem. It combines an **ESP32 microcontroller subsystem** for sensor polling and relay control, a **Laravel 11 REST API & Filament v3 Admin Panel** for business logic, data persistence, and administrative auditing, and a cross-platform **Flutter Mobile Application** for farmers.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+> 📄 **Full Technical Reference:** For complete database migration details, 11-table schema specifications, complete API route directory, hardware circuit pinouts, and system workflows, see [PROJECT_DOCUMENTATION.md](file:///e:/Flutter%20my/Flutter/sm_agro_final_project/sm_agro_laravel/PROJECT_DOCUMENTATION.md).
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## 🌟 Key Features & Functional Modules
 
-## Learning Laravel
+### 📱 1. Mobile Application (Flutter)
+* **Real-time Telemetry Dashboard:** Live monitoring of ambient temperature (°C), relative humidity (%), and soil moisture (%) with dynamic gauge cards.
+* **Actuator Remote Override:** Direct manual toggling of 4 hardware actuators (Drip Irrigation Pump, High-Pressure Mist Spray Pump, Exhaust Fan, Grow Lights).
+* **Dual Operational Modes:** Instant switching between **Automated Threshold Mode** and **Manual Control Mode**.
+* **AI Agronomist Chatbot:** Integrated AI assistant powered by Google Gemini for diagnosing crop diseases, fertilizer recommendations, and agronomic support.
+* **Irrigation Timer Routine Scheduler:** Custom creation of time-of-day drip watering routines with weekly day-of-week recurrence.
+* **QR Code Hardware Pairing:** Fast mobile camera QR scanning to link physical ESP32 enclosures to farmer accounts.
+* **Subscription Billing & Slip Upload:** Monthly payment auditing pipeline allowing farmers to capture and submit bank slips for admin verification.
+* **PDF Telemetry Reports:** Exportable PDF reports summarizing crop microclimate trends and irrigation history.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+### ⚙️ 2. Cloud Backend & Admin Portal (Laravel 11 & Filament v3)
+* **Sanctum Token Authentication:** Secure API token authentication for mobile users and ESP32 hardware units.
+* **Filament v3 Audit Panel:** Web management portal for superusers to verify pending user accounts, audit uploaded payment receipts, and monitor system analytics.
+* **Real-time FCM Notifications:** Firebase Cloud Messaging integration for pushing critical microclimate alerts (e.g. overheating, severe drought) to mobile devices.
+* **Live Admin Chat Support:** Real-time bi-directional direct messaging between farmers and administrators with document/image attachment support.
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 🔌 3. IoT Embedded Subsystem (ESP32 Firmware)
+* **Sensor Suite:** DHT22 (AM2302) digital temperature & humidity sensor and Analog Soil Moisture probe.
+* **4-Channel Relay Actuation:** Optocoupled relays driving high-voltage hardware (Drip Pump, Mist Spray Pump, Exhaust Fan, LED Grow Lights).
+* **Asynchronous 3-Second Heartbeat:** Non-blocking HTTP POST sync with `/api/esp32/sync` transmitting telemetry and fetching dynamic backend overrides.
+* **Local Safety Fallback:** Automatic switch to local threshold control if network connectivity is interrupted.
 
-## Laravel Sponsors
+---
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+## 🗄️ Database Architecture (MySQL - `sm_agro`)
 
-### Premium Partners
+The database architecture consists of **11 tables**:
+1. `users` - Farmer profiles, hardware assignments, approval states (`pending`, `approved`, `denied`), FCM tokens.
+2. `admins` - Superuser credentials for Filament admin portal access.
+3. `plants` - Selected crop metadata, cultivation age, daily water volume targets (mL), ideal microclimate thresholds.
+4. `farm_conditions` - Time-series environmental sensor telemetry log records.
+5. `motors` - Real-time state of hardware relays (`drip_pump`, `mist_pump`, `fan`, `light`).
+6. `modes` - System control state (`Auto` vs `Manual`) and mist scheduling parameters.
+7. `irrigation_schedules` - Custom recurring drip irrigation watering timers.
+8. `payments` - Subscription payment audit log with uploaded bank slip paths and status (`pending`, `approved`, `rejected`).
+9. `messages` - Support chat message histories and attachments exchanged between farmers and admins.
+10. `esp_notifications` - Historical critical alert log notifications.
+11. `device_events` - Hardware system status change logs and diagnostic events.
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+---
 
-## Contributing
+## 🚀 Quick Setup & Installation Guide
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### Backend Setup (Laravel)
+```bash
+cd sm_agro_laravel
+composer install
+cp .env.example .env
+# Configure DB_DATABASE=sm_agro in .env
+php artisan key:generate
+php artisan migrate --seed
+php artisan storage:link
+php artisan serve --host=0.0.0.0 --port=8000
+```
+* Access REST API at `http://localhost:8000/api`
+* Access Admin Portal at `http://localhost:8000/admin`
 
-## Code of Conduct
+### Mobile App Setup (Flutter)
+```bash
+cd smart_agro
+flutter pub get
+# Update base URL in lib/core/ services to server IP address
+flutter run
+```
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### Firmware Setup (ESP32)
+1. Open `esp32_smart_agro/esp32_smart_agro.ino` in Arduino IDE.
+2. Install `ArduinoJson`, `Adafruit DHT`, and `LiquidCrystal_I2C` libraries.
+3. Update Wi-Fi SSID, Password, and API Server IP.
+4. Flash firmware to **ESP32 Dev Module**.
 
-## Security Vulnerabilities
+---
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+## 📑 Detailed Documentation
 
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+For full architectural diagrams, complete field-by-field database tables, REST API endpoint request/response payloads, and sequence diagrams, refer to [PROJECT_DOCUMENTATION.md](file:///e:/Flutter%20my/Flutter/sm_agro_final_project/sm_agro_laravel/PROJECT_DOCUMENTATION.md).
