@@ -1,0 +1,61 @@
+services:
+  app:
+    build: .
+    container_name: smartagro_app
+    restart: unless-stopped
+    volumes:
+      - .:/var/www
+      - vendor_data:/var/www/vendor
+    depends_on:
+      - db
+    networks:
+      - smartagro
+
+  webserver:
+    image: nginx:alpine
+    container_name: smartagro_nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - .:/var/www
+      - ./docker/nginx.conf:/etc/nginx/conf.d/default.conf
+    depends_on:
+      - app
+    networks:
+      - smartagro
+
+  db:
+    image: mysql:8.0
+    container_name: smartagro_db
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: sm_agro
+      MYSQL_USER: sm_agro_user
+      MYSQL_PASSWORD: changeme_password
+      MYSQL_ROOT_PASSWORD: changeme_root_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - smartagro
+
+  queue:
+    build: .
+    container_name: smartagro_queue
+    restart: unless-stopped
+    command: php artisan queue:work --sleep=3 --tries=3
+    volumes:
+      - .:/var/www
+      - vendor_data:/var/www/vendor
+    depends_on:
+      - db
+      - app
+    networks:
+      - smartagro
+
+networks:
+  smartagro:
+
+volumes:
+  vendor_data:
+  mysql_data:
