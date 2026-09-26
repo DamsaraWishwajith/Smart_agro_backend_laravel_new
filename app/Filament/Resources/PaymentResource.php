@@ -19,7 +19,8 @@ class PaymentResource extends Resource
     protected static ?string $navigationIcon = 'heroicon-o-banknotes';
     protected static ?string $navigationLabel = 'Payments';
     protected static ?int $navigationSort = 2;
-
+    // 👇 Sidebar එකෙන් hide කිරීමට (Hide from navigation):
+    protected static bool $shouldRegisterNavigation = false;
     public static function form(Form $form): Form
     {
         return $form
