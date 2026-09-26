@@ -28,7 +28,7 @@ class AdminPanelProvider extends PanelProvider
             ->id('admin')
             ->path('admin')
             ->login()
-            ->brandName('Sm agro')
+            ->brandName('Smart Agro')
             ->authGuard('admin')
             ->colors([
                 'primary' => Color::Amber,
