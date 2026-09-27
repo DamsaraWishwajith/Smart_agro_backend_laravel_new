@@ -86,6 +86,7 @@ class AdminResource extends Resource
         return [
             'index' => Pages\ListAdmins::route('/'),
             'create' => Pages\CreateAdmin::route('/create'),
+            'view' => Pages\ViewAdmin::route('/{record}'),
             'edit' => Pages\EditAdmin::route('/{record}/edit'),
         ];
     }

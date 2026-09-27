@@ -1,14 +1,14 @@
 <?php
 
-namespace App\Filament\Resources\IrrigationScheduleResource\Pages;
+namespace App\Filament\Resources\ModeResource\Pages;
 
-use App\Filament\Resources\IrrigationScheduleResource;
+use App\Filament\Resources\ModeResource;
 use Filament\Actions;
 use Filament\Resources\Pages\ViewRecord;
 
-class ViewIrrigationSchedule extends ViewRecord
+class ViewMode extends ViewRecord
 {
-    protected static string $resource = IrrigationScheduleResource::class;
+    protected static string $resource = ModeResource::class;
 
     protected function getHeaderActions(): array
     {

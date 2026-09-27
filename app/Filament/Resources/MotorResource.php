@@ -115,6 +115,7 @@ class MotorResource extends Resource
         return [
             'index' => Pages\ListMotors::route('/'),
             'create' => Pages\CreateMotor::route('/create'),
+            'view' => Pages\ViewMotor::route('/{record}'),
             'edit' => Pages\EditMotor::route('/{record}/edit'),
         ];
     }

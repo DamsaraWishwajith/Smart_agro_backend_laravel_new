@@ -80,6 +80,7 @@ class ModeResource extends Resource
         return [
             'index' => Pages\ListModes::route('/'),
             'create' => Pages\CreateMode::route('/create'),
+            'view' => Pages\ViewMode::route('/{record}'),
             'edit' => Pages\EditMode::route('/{record}/edit'),
         ];
     }

@@ -120,6 +120,7 @@ class PlantResource extends Resource
         return [
             'index' => Pages\ListPlants::route('/'),
             'create' => Pages\CreatePlant::route('/create'),
+            'view' => Pages\ViewPlant::route('/{record}'),
             'edit' => Pages\EditPlant::route('/{record}/edit'),
         ];
     }
