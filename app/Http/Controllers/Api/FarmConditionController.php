@@ -471,34 +471,55 @@ class FarmConditionController extends Controller
             }
             $motorStatus->light = $isLightActive ? 'ON' : 'OFF';
 
-            // 3. Auto Mist & Exhaust Fan Control
-            // mist_auto_schedule=true  → Temperature-threshold control (current temp >= target → Mist+Fan ON)
-            // mist_auto_schedule=false → No automatic mist control (manual toggle only)
+            // 3. Auto Mist & Exhaust Fan Control (ONLY in Auto Mode)
+            // - When ticked (mist_auto_schedule = true):
+            //     Follows the time schedule (mist_time_val = 1 sent to ESP32).
+            //     Server mirrors the schedule window for motor records.
+            // - When NOT ticked (mist_auto_schedule = false):
+            //     Temperature hysteresis control (mist_time_val = 0 sent to ESP32).
+            //     Current temp >= target temp: Mist & Exhaust turn ON.
+            //     Stays ON until current temp cools down by 5°C below target, then turns OFF.
             if ($mistAutoScheduleEnabled) {
-                // Temperature-threshold based mist & exhaust control (with hysteresis)
+                // Scheduled Mist Mode (Tick ON)
+                $h = (int)$now->format('H');
+                $m = (int)$now->format('i');
+                $inMistActiveWindow = false;
+
+                if ($h >= 10 && $h <= 15) {
+                    if (($m >= 10 && $m < 14) || ($m >= 25 && $m < 29) || ($m >= 40 && $m < 44) || ($m >= 55 && $m < 59)) {
+                        $inMistActiveWindow = true;
+                    }
+                } elseif ($h == 16) {
+                    if ($m >= 10 && $m < 14) {
+                        $inMistActiveWindow = true;
+                    }
+                }
+
+                $motorStatus->mist    = $inMistActiveWindow ? 'ON' : 'OFF';
+                $motorStatus->exhaust = $inMistActiveWindow ? 'ON' : 'OFF';
+                \Illuminate\Support\Facades\Cache::forget("auto_mist_{$user->id}_{$request->device_id}");
+                \Log::debug("[Auto Mist Schedule] Time={$currentTime} | Active={$inMistActiveWindow} | Mist={$motorStatus->mist}");
+            } else {
+                // Temperature Hysteresis Control (Tick OFF)
                 $targetTemp = $plant ? ($plant->temperature ?? 30) : 30;
                 $prevMist = \Illuminate\Support\Facades\Cache::get("auto_mist_{$user->id}_{$request->device_id}", 'OFF');
 
                 if ($request->temp >= $targetTemp) {
-                    // Current temp has reached/exceeded target → turn ON
+                    // Current temp reaches or exceeds target → turn ON
                     $motorStatus->mist    = 'ON';
                     $motorStatus->exhaust = 'ON';
                     \Illuminate\Support\Facades\Cache::put("auto_mist_{$user->id}_{$request->device_id}", 'ON');
                 } elseif ($request->temp < ($targetTemp - 5)) {
-                    // Temp dropped well below target (hysteresis band) → turn OFF
+                    // Cooled down 5°C below target → turn OFF
                     $motorStatus->mist    = 'OFF';
                     $motorStatus->exhaust = 'OFF';
                     \Illuminate\Support\Facades\Cache::put("auto_mist_{$user->id}_{$request->device_id}", 'OFF');
                 } else {
-                    // Hysteresis zone (target-5 to target) — hold previous state to avoid rapid cycling
+                    // Hysteresis band (target - 5 to target): hold previous state
                     $motorStatus->mist    = $prevMist;
                     $motorStatus->exhaust = $prevMist;
                 }
-                \Log::debug("[Auto Temp Ctrl] Temp={$request->temp} Target={$targetTemp} → Mist={$motorStatus->mist}");
-            } else {
-                // Auto schedule OFF — mist/exhaust are not auto-controlled in Auto mode
-                // Leave mist/exhaust as-is (they stay at whatever the user last set manually)
-                \Log::debug("[Auto Mist] Auto Mist disabled — skipping mist/exhaust control");
+                \Log::debug("[Auto Temp Ctrl] Temp={$request->temp} Target={$targetTemp} → Mist={$motorStatus->mist} Exhaust={$motorStatus->exhaust}");
             }
 
             $motorStatus->save();
