@@ -40,12 +40,17 @@ class PushNotificationScreen extends Page implements HasForms
                 Select::make('user_id')
                     ->label('Target User')
                     ->options(function () {
-                        $users = User::whereNotNull('fcm_token')->pluck('name', 'id')->toArray();
-                        return ['all' => 'Send to All Users (with valid tokens)'] + $users;
+                        $options = ['all' => '📢 Send to All Users (with active FCM tokens)'];
+                        $users = User::orderBy('name')->get();
+                        foreach ($users as $u) {
+                            $status = !empty($u->fcm_token) ? '✅ [Active Token]' : '⚠️ [No FCM Token]';
+                            $options[$u->id] = "{$u->name} ({$u->email}) - {$status}";
+                        }
+                        return $options;
                     })
                     ->required()
                     ->searchable()
-                    ->helperText('Only users who have opened the app and registered an FCM token will appear here.'),
+                    ->helperText('Select a user. Users marked with ⚠️ [No FCM Token] must first log into the Flutter mobile app on an Android phone with notifications allowed.'),
                 TextInput::make('title')
                     ->label('Notification Title')
                     ->required()
