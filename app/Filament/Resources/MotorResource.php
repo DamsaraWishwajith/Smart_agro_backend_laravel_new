@@ -28,7 +28,6 @@ class MotorResource extends Resource
                         Forms\Components\Select::make('user_id')
                             ->relationship('user', 'name')
                             ->required()
-                            ->searchable()
                             ->preload(),
                         Forms\Components\TextInput::make('device_id')
                             ->required()

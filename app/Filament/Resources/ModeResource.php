@@ -27,8 +27,7 @@ class ModeResource extends Resource
                     ->schema([
                         Forms\Components\Select::make('user_id')
                             ->relationship('user', 'name')
-                            ->required()
-                            ->searchable(),
+                            ->required(),
                         Forms\Components\Select::make('mode')
                             ->options(['MANUAL' => 'Manual', 'AUTO' => 'Auto'])
                             ->required()

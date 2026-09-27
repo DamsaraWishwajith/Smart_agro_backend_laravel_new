@@ -28,7 +28,6 @@ class PlantResource extends Resource
                         Forms\Components\Select::make('user_id')
                             ->relationship('user', 'name')
                             ->required()
-                            ->searchable()
                             ->preload(),
                         Forms\Components\TextInput::make('crop_name')
                             ->maxLength(191),
