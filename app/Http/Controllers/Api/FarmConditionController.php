@@ -436,9 +436,10 @@ class FarmConditionController extends Controller
             ['drip' => 'OFF', 'mist' => 'OFF', 'exhaust' => 'OFF', 'light' => 'OFF']
         );
 
-        // Retrieve mist_auto_schedule flag from modes table (needed in both branches)
+        // Retrieve mist_auto_schedule flag from modes table
+        // Auto Mist & Temp Control is ONLY active in Auto mode! In Manual mode it is always inactive.
         $userMode = \App\Models\Mode::where('user_id', $user->id)->first();
-        $mistAutoScheduleEnabled = ($userMode && $userMode->mist_auto_schedule) ? true : false;
+        $mistAutoScheduleEnabled = ($modeStr === 'Auto' && $userMode && $userMode->mist_auto_schedule) ? true : false;
 
         $now = \Carbon\Carbon::now('Asia/Colombo');
         $currentDay = $now->format('D');   // e.g. "Mon"
@@ -504,6 +505,11 @@ class FarmConditionController extends Controller
 
         } else {
             // ─── MANUAL MODE ─────────────────────────────────────────────────────────────
+            // Auto Mist & Temp Control is an AUTO mode-only feature.
+            if ($userMode && $userMode->mist_auto_schedule) {
+                $userMode->update(['mist_auto_schedule' => false]);
+            }
+
             // In Manual mode the server ONLY controls the Drip Irrigation schedule.
             // Light and Mist/Exhaust are left to the user's manual toggle commands (updateMotors).
             \Log::debug("[ESP32 Sync] MANUAL Mode | Day={$currentDay} | Time={$currentTime} | Device={$request->device_id}");
@@ -538,8 +544,8 @@ class FarmConditionController extends Controller
         \Log::debug("[ESP32 Sync] Result → drip={$motorStatus->drip} mist={$motorStatus->mist} light={$motorStatus->light}");
 
 
-        // mist_time_val: 1 = timer-based, 0 = temperature-threshold
-        $mistTimeVal = $mistAutoScheduleEnabled ? 1 : 0;
+        // mist_time_val: 1 = timer-based (Auto mode only), 0 = temperature-threshold / disabled
+        $mistTimeVal = ($modeStr === 'Auto' && $mistAutoScheduleEnabled) ? 1 : 0;
 
         return response()->json([
             'success' => true,
