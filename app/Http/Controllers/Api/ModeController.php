@@ -46,28 +46,9 @@ class ModeController extends Controller
         $updateData = [];
         if ($request->has('mode')) {
             $updateData['mode'] = $request->mode;
-            // When switching to Manual mode, Auto Mist & Temp Control MUST be turned off
-            if (strtoupper($request->mode) === 'MANUAL') {
-                $updateData['mist_auto_schedule'] = false;
-
-                // Turn OFF mist & exhaust motors that may have been triggered by Auto mode
-                \App\Models\Motor::where('user_id', $request->user_id)->update([
-                    'mist' => 'OFF',
-                    'exhaust' => 'OFF',
-                ]);
-            }
         }
         if ($request->has('mist_auto_schedule')) {
-            // Auto Mist & Temp Control can ONLY be enabled in AUTO mode
-            $currentMode = $request->has('mode')
-                ? strtoupper($request->mode)
-                : strtoupper(Mode::where('user_id', $request->user_id)->value('mode') ?? 'MANUAL');
-
-            if ($currentMode === 'MANUAL') {
-                $updateData['mist_auto_schedule'] = false;
-            } else {
-                $updateData['mist_auto_schedule'] = (bool)$request->mist_auto_schedule;
-            }
+            $updateData['mist_auto_schedule'] = $request->mist_auto_schedule;
         }
 
         if (empty($updateData)) {
@@ -113,12 +94,6 @@ class ModeController extends Controller
                 'success' => false,
                 'message' => 'Mode not found for this user'
             ], 404);
-        }
-
-        // Auto Mist & Temp Control is only valid in AUTO mode. In MANUAL mode it is always false.
-        if (strtoupper($mode->mode) === 'MANUAL' && $mode->mist_auto_schedule) {
-            $mode->mist_auto_schedule = false;
-            $mode->save();
         }
 
         $user = \App\Models\User::find($request->user_id);
