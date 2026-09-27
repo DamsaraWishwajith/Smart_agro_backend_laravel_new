@@ -512,7 +512,9 @@ class FarmConditionController extends Controller
                     }
                 }
                 
-                $expectedMist = $isMistScheduled ? 'ON' : 'OFF';
+                $targetTemp = $plant ? ($plant->temperature ?? 30) : 30;
+                // Only turn ON if schedule is active AND current temperature >= target temperature (rainy/cool day protection)
+                $expectedMist = ($isMistScheduled && $request->temp >= $targetTemp) ? 'ON' : 'OFF';
                 $prevMist = \Illuminate\Support\Facades\Cache::get("mist_sched_{$user->id}_{$request->device_id}", 'OFF');
                 if ($expectedMist !== $prevMist) {
                     $motorStatus->mist = $expectedMist;
