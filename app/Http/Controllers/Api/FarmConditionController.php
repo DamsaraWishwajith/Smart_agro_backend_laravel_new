@@ -447,29 +447,7 @@ class FarmConditionController extends Controller
                 \Log::debug("[Edge Trigger] Drip changed to {$expectedDrip}");
             }
 
-            // 2. Light System Schedules
-            $lightSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
-                ->where('system_type', 'light')
-                ->get();
-            $isLightScheduled = false;
-            foreach ($lightSchedules as $schedule) {
-                $days = $schedule->days;
-                $scheduleDays = is_array($days) ? $days : json_decode($days, true);
-                if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
-                    if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
-                        $isLightScheduled = true;
-                        break;
-                    }
-                }
-            }
-            
-            $expectedLight = $isLightScheduled ? 'ON' : 'OFF';
-            $prevLight = \Illuminate\Support\Facades\Cache::get("light_sched_{$user->id}_{$request->device_id}", 'OFF');
-            if ($expectedLight !== $prevLight) {
-                $motorStatus->light = $expectedLight;
-                \Illuminate\Support\Facades\Cache::put("light_sched_{$user->id}_{$request->device_id}", $expectedLight);
-                \Log::debug("[Edge Trigger] Light changed to {$expectedLight}");
-            }
+            // In Manual Mode, Light is controlled purely by manual switches without schedule overrides.
 
             // 3. Mist & Exhaust control
             $mistSchedulesCount = \App\Models\IrrigationSchedule::where('user_id', $user->id)
@@ -525,14 +503,41 @@ class FarmConditionController extends Controller
 
             $motorStatus->save();
         } else {
-            // Auto Mode: Clear any residual manual motor states so ESP32 can run its built-in logic properly.
-            // If we don't clear this, a previously forced 'ON' state from manual mode would permanently override the ESP32's internal timers.
-            if ($motorStatus->drip !== 'OFF' || $motorStatus->mist !== 'OFF' || $motorStatus->exhaust !== 'OFF' || $motorStatus->light !== 'OFF') {
+            // Auto Mode: Clear any residual manual motor states for drip, mist, and exhaust so ESP32 can run its built-in logic properly.
+            if ($motorStatus->drip !== 'OFF' || $motorStatus->mist !== 'OFF' || $motorStatus->exhaust !== 'OFF') {
                 $motorStatus->drip = 'OFF';
                 $motorStatus->mist = 'OFF';
                 $motorStatus->exhaust = 'OFF';
-                $motorStatus->light = 'OFF';
                 $motorStatus->save();
+            }
+
+            // In Auto Mode, Grow Light follows its User-Defined Auto Schedule!
+            $now = \Carbon\Carbon::now('Asia/Colombo');
+            $currentDay = $now->format('D');
+            $currentTime = $now->format('H:i:s');
+
+            $lightSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
+                ->where('system_type', 'light')
+                ->get();
+            $isLightScheduled = false;
+            foreach ($lightSchedules as $schedule) {
+                $days = $schedule->days;
+                $scheduleDays = is_array($days) ? $days : json_decode($days, true);
+                if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
+                    if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
+                        $isLightScheduled = true;
+                        break;
+                    }
+                }
+            }
+
+            $expectedLight = $isLightScheduled ? 'ON' : 'OFF';
+            $prevLight = \Illuminate\Support\Facades\Cache::get("light_sched_{$user->id}_{$request->device_id}", 'OFF');
+            if ($expectedLight !== $prevLight || $motorStatus->light !== $expectedLight) {
+                $motorStatus->light = $expectedLight;
+                $motorStatus->save();
+                \Illuminate\Support\Facades\Cache::put("light_sched_{$user->id}_{$request->device_id}", $expectedLight);
+                \Log::debug("[Edge Trigger Auto Mode] Light changed to {$expectedLight}");
             }
         }
 
