@@ -15,5 +15,6 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
+            echo '${{ secrets.FIREBASE_CREDENTIALS_JSON }}' > /home/ec2-user/Smart_agro_backend_laravel_new/storage/firebase-credentials.json
             cd ~/Smart_agro_backend_laravel_new
             ./deploy.sh
