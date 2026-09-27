@@ -474,6 +474,7 @@ class FarmConditionController extends Controller
                     \Illuminate\Support\Facades\Cache::put("mist_sched_{$user->id}_{$request->device_id}", $expectedMist);
                 }
             } else {
+            
                 // Timer mode
                 $mistSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
                     ->where('system_type', 'mist')
