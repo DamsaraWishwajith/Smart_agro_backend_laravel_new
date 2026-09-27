@@ -446,27 +446,13 @@ class FarmConditionController extends Controller
 
         if ($modeStr === 'Auto') {
             // ─── AUTO MODE ──────────────────────────────────────────────────────────────
-            // In Auto mode the server controls all relays based on:
-            //   • Light  → time-based schedule (system_type = 'light')
-            //   • Mist/Exhaust → either timer schedule (if mist_auto_schedule=true) OR temp threshold
-            //   • Drip   → time-based schedule (system_type = 'drip')
+            // Server controls ONLY: Light (schedule) + Mist/Exhaust (temp threshold or schedule)
+            // Drip is handled ENTIRELY by ESP32's own soil-moisture sensor + NTP timer logic.
+            // Server sets drip='OFF' (neutral) so ESP32's internal logic is never blocked.
             \Log::debug("[ESP32 Sync] AUTO Mode | Day={$currentDay} | Time={$currentTime} | Device={$request->device_id} | MistAutoSched={$mistAutoScheduleEnabled}");
 
-            // 1. Drip Irrigation Schedule
-            $dripSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
-                ->where('system_type', 'drip')
-                ->get();
-            $isDripActive = false;
-            foreach ($dripSchedules as $schedule) {
-                $scheduleDays = is_array($schedule->days) ? $schedule->days : json_decode($schedule->days, true);
-                if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
-                    if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
-                        $isDripActive = true;
-                        break;
-                    }
-                }
-            }
-            $motorStatus->drip = $isDripActive ? 'ON' : 'OFF';
+            // 1. Drip → always OFF from server side; ESP32 handles it via soil moisture sensor
+            $motorStatus->drip = 'OFF';
 
             // 2. Grow Light Auto Schedule (system_type = 'light')
             $lightSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
