@@ -415,22 +415,108 @@ class FarmConditionController extends Controller
             ['drip' => 'OFF', 'mist' => 'OFF', 'exhaust' => 'OFF', 'light' => 'OFF']
         );
 
-        // Process User-Defined Schedules with Edge-Triggering (Cache) ONLY in Manual Mode
-        if ($modeStr === 'Manual') {
-            $now = \Carbon\Carbon::now('Asia/Colombo');
-            $currentDay = $now->format('D'); // e.g. "Mon"
-            $currentTime = $now->format('H:i:s'); // e.g. "18:30:00"
+        // Retrieve mist_auto_schedule flag from modes table (needed in both branches)
+        $userMode = \App\Models\Mode::where('user_id', $user->id)->first();
+        $mistAutoScheduleEnabled = ($userMode && $userMode->mist_auto_schedule) ? true : false;
 
-            \Log::debug("[ESP32 Sync] Manual Mode | Day={$currentDay} | Time={$currentTime} | Device={$request->device_id}");
+        $now = \Carbon\Carbon::now('Asia/Colombo');
+        $currentDay = $now->format('D');   // e.g. "Mon"
+        $currentTime = $now->format('H:i:s'); // e.g. "18:30:00"
 
-            // 1. Drip Irrigation Schedules
+        if ($modeStr === 'Auto') {
+            // ─── AUTO MODE ──────────────────────────────────────────────────────────────
+            // In Auto mode the server controls all relays based on:
+            //   • Light  → time-based schedule (system_type = 'light')
+            //   • Mist/Exhaust → either timer schedule (if mist_auto_schedule=true) OR temp threshold
+            //   • Drip   → time-based schedule (system_type = 'drip')
+            \Log::debug("[ESP32 Sync] AUTO Mode | Day={$currentDay} | Time={$currentTime} | Device={$request->device_id} | MistAutoSched={$mistAutoScheduleEnabled}");
+
+            // 1. Drip Irrigation Schedule
+            $dripSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
+                ->where('system_type', 'drip')
+                ->get();
+            $isDripActive = false;
+            foreach ($dripSchedules as $schedule) {
+                $scheduleDays = is_array($schedule->days) ? $schedule->days : json_decode($schedule->days, true);
+                if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
+                    if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
+                        $isDripActive = true;
+                        break;
+                    }
+                }
+            }
+            $motorStatus->drip = $isDripActive ? 'ON' : 'OFF';
+
+            // 2. Grow Light Auto Schedule (system_type = 'light')
+            $lightSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
+                ->where('system_type', 'light')
+                ->get();
+            $isLightActive = false;
+            foreach ($lightSchedules as $schedule) {
+                $scheduleDays = is_array($schedule->days) ? $schedule->days : json_decode($schedule->days, true);
+                if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
+                    if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
+                        $isLightActive = true;
+                        break;
+                    }
+                }
+            }
+            $motorStatus->light = $isLightActive ? 'ON' : 'OFF';
+
+            // 3. Auto Mist & Exhaust Fan Control
+            if ($mistAutoScheduleEnabled) {
+                // Timer-based mist schedule (system_type = 'mist')
+                $mistSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
+                    ->where('system_type', 'mist')
+                    ->get();
+                $isMistActive = false;
+                foreach ($mistSchedules as $schedule) {
+                    $scheduleDays = is_array($schedule->days) ? $schedule->days : json_decode($schedule->days, true);
+                    if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
+                        if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
+                            $isMistActive = true;
+                            break;
+                        }
+                    }
+                }
+                $motorStatus->mist    = $isMistActive ? 'ON' : 'OFF';
+                $motorStatus->exhaust = $isMistActive ? 'ON' : 'OFF';
+                \Log::debug("[Auto Mist Timer] Mist/Exhaust → " . ($isMistActive ? 'ON' : 'OFF'));
+            } else {
+                // Temperature-threshold based mist & exhaust control
+                $targetTemp = $plant ? ($plant->temperature ?? 30) : 30;
+                $prevMist = \Illuminate\Support\Facades\Cache::get("auto_mist_{$user->id}_{$request->device_id}", 'OFF');
+                if ($request->temp >= $targetTemp) {
+                    $motorStatus->mist    = 'ON';
+                    $motorStatus->exhaust = 'ON';
+                    \Illuminate\Support\Facades\Cache::put("auto_mist_{$user->id}_{$request->device_id}", 'ON');
+                } elseif ($request->temp < ($targetTemp - 5)) {
+                    $motorStatus->mist    = 'OFF';
+                    $motorStatus->exhaust = 'OFF';
+                    \Illuminate\Support\Facades\Cache::put("auto_mist_{$user->id}_{$request->device_id}", 'OFF');
+                } else {
+                    // Hysteresis zone — hold previous state
+                    $motorStatus->mist    = $prevMist;
+                    $motorStatus->exhaust = $prevMist;
+                }
+                \Log::debug("[Auto Temp Ctrl] Temp={$request->temp} Target={$targetTemp} → Mist={$motorStatus->mist}");
+            }
+
+            $motorStatus->save();
+
+        } else {
+            // ─── MANUAL MODE ─────────────────────────────────────────────────────────────
+            // In Manual mode the server ONLY controls the Drip Irrigation schedule.
+            // Light and Mist/Exhaust are left to the user's manual toggle commands (updateMotors).
+            \Log::debug("[ESP32 Sync] MANUAL Mode | Day={$currentDay} | Time={$currentTime} | Device={$request->device_id}");
+
+            // Drip Irrigation Schedules only
             $dripSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
                 ->where('system_type', 'drip')
                 ->get();
             $isDripScheduled = false;
             foreach ($dripSchedules as $schedule) {
-                $days = $schedule->days;
-                $scheduleDays = is_array($days) ? $days : json_decode($days, true);
+                $scheduleDays = is_array($schedule->days) ? $schedule->days : json_decode($schedule->days, true);
                 if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
                     if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
                         $isDripScheduled = true;
@@ -438,7 +524,7 @@ class FarmConditionController extends Controller
                     }
                 }
             }
-            
+
             $expectedDrip = $isDripScheduled ? 'ON' : 'OFF';
             $prevDrip = \Illuminate\Support\Facades\Cache::get("drip_sched_{$user->id}_{$request->device_id}", 'OFF');
             if ($expectedDrip !== $prevDrip) {
@@ -447,99 +533,15 @@ class FarmConditionController extends Controller
                 \Log::debug("[Edge Trigger] Drip changed to {$expectedDrip}");
             }
 
-            // 2. Light System Schedules
-            $lightSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
-                ->where('system_type', 'light')
-                ->get();
-            $isLightScheduled = false;
-            foreach ($lightSchedules as $schedule) {
-                $days = $schedule->days;
-                $scheduleDays = is_array($days) ? $days : json_decode($days, true);
-                if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
-                    if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
-                        $isLightScheduled = true;
-                        break;
-                    }
-                }
-            }
-            
-            $expectedLight = $isLightScheduled ? 'ON' : 'OFF';
-            $prevLight = \Illuminate\Support\Facades\Cache::get("light_sched_{$user->id}_{$request->device_id}", 'OFF');
-            if ($expectedLight !== $prevLight) {
-                $motorStatus->light = $expectedLight;
-                \Illuminate\Support\Facades\Cache::put("light_sched_{$user->id}_{$request->device_id}", $expectedLight);
-                \Log::debug("[Edge Trigger] Light changed to {$expectedLight}");
-            }
-
-            // 3. Mist & Exhaust control
-            $mistSchedulesCount = \App\Models\IrrigationSchedule::where('user_id', $user->id)
-                ->where('system_type', 'mist')
-                ->count();
-            $mistTimeVal = $mistSchedulesCount > 0 ? 1 : 0;
-
-            if ($mistTimeVal === 0) {
-                // Sensor-threshold mode for Mist (Edge-triggered to allow manual overrides)
-                $targetTemp = $plant ? ($plant->temperature ?? 30) : 30;
-                $expectedMist = 'OFF';
-                if ($request->temp >= $targetTemp) {
-                    $expectedMist = 'ON';
-                } else if ($request->temp < ($targetTemp - 5)) {
-                    $expectedMist = 'OFF';
-                } else {
-                    $expectedMist = \Illuminate\Support\Facades\Cache::get("mist_sched_{$user->id}_{$request->device_id}", 'OFF');
-                }
-                
-                $prevMist = \Illuminate\Support\Facades\Cache::get("mist_sched_{$user->id}_{$request->device_id}", 'OFF');
-                if ($expectedMist !== $prevMist) {
-                    $motorStatus->mist = $expectedMist;
-                    $motorStatus->exhaust = $expectedMist;
-                    \Illuminate\Support\Facades\Cache::put("mist_sched_{$user->id}_{$request->device_id}", $expectedMist);
-                }
-            } else {
-                // Timer mode
-                $mistSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
-                    ->where('system_type', 'mist')
-                    ->get();
-                $isMistScheduled = false;
-                foreach ($mistSchedules as $schedule) {
-                    $days = $schedule->days;
-                    $scheduleDays = is_array($days) ? $days : json_decode($days, true);
-                    if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
-                        if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
-                            $isMistScheduled = true;
-                            break;
-                        }
-                    }
-                }
-                
-                $expectedMist = $isMistScheduled ? 'ON' : 'OFF';
-                $prevMist = \Illuminate\Support\Facades\Cache::get("mist_sched_{$user->id}_{$request->device_id}", 'OFF');
-                if ($expectedMist !== $prevMist) {
-                    $motorStatus->mist = $expectedMist;
-                    $motorStatus->exhaust = $expectedMist;
-                    \Illuminate\Support\Facades\Cache::put("mist_sched_{$user->id}_{$request->device_id}", $expectedMist);
-                }
-            }
-
+            // Light and Mist/Exhaust are NOT touched in Manual mode — user controls them directly.
             $motorStatus->save();
-        } else {
-            // Auto Mode: Clear any residual manual motor states so ESP32 can run its built-in logic properly.
-            // If we don't clear this, a previously forced 'ON' state from manual mode would permanently override the ESP32's internal timers.
-            if ($motorStatus->drip !== 'OFF' || $motorStatus->mist !== 'OFF' || $motorStatus->exhaust !== 'OFF' || $motorStatus->light !== 'OFF') {
-                $motorStatus->drip = 'OFF';
-                $motorStatus->mist = 'OFF';
-                $motorStatus->exhaust = 'OFF';
-                $motorStatus->light = 'OFF';
-                $motorStatus->save();
-            }
         }
 
         \Log::debug("[ESP32 Sync] Result → drip={$motorStatus->drip} mist={$motorStatus->mist} light={$motorStatus->light}");
 
 
-        // Get mist timer vs threshold setting (mist_time_val) from user's Mode table (mist_auto_schedule)
-        $userMode = \App\Models\Mode::where('user_id', $user->id)->first();
-        $mistTimeVal = ($userMode && $userMode->mist_auto_schedule) ? 1 : 0;
+        // mist_time_val: 1 = timer-based, 0 = temperature-threshold
+        $mistTimeVal = $mistAutoScheduleEnabled ? 1 : 0;
 
         return response()->json([
             'success' => true,
