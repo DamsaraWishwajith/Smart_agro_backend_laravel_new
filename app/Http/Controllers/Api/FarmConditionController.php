@@ -464,42 +464,33 @@ class FarmConditionController extends Controller
             $motorStatus->light = $isLightActive ? 'ON' : 'OFF';
 
             // 3. Auto Mist & Exhaust Fan Control
+            // mist_auto_schedule=true  → Temperature-threshold control (current temp >= target → Mist+Fan ON)
+            // mist_auto_schedule=false → No automatic mist control (manual toggle only)
             if ($mistAutoScheduleEnabled) {
-                // Timer-based mist schedule (system_type = 'mist')
-                $mistSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
-                    ->where('system_type', 'mist')
-                    ->get();
-                $isMistActive = false;
-                foreach ($mistSchedules as $schedule) {
-                    $scheduleDays = is_array($schedule->days) ? $schedule->days : json_decode($schedule->days, true);
-                    if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
-                        if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
-                            $isMistActive = true;
-                            break;
-                        }
-                    }
-                }
-                $motorStatus->mist    = $isMistActive ? 'ON' : 'OFF';
-                $motorStatus->exhaust = $isMistActive ? 'ON' : 'OFF';
-                \Log::debug("[Auto Mist Timer] Mist/Exhaust → " . ($isMistActive ? 'ON' : 'OFF'));
-            } else {
-                // Temperature-threshold based mist & exhaust control
+                // Temperature-threshold based mist & exhaust control (with hysteresis)
                 $targetTemp = $plant ? ($plant->temperature ?? 30) : 30;
                 $prevMist = \Illuminate\Support\Facades\Cache::get("auto_mist_{$user->id}_{$request->device_id}", 'OFF');
+
                 if ($request->temp >= $targetTemp) {
+                    // Current temp has reached/exceeded target → turn ON
                     $motorStatus->mist    = 'ON';
                     $motorStatus->exhaust = 'ON';
                     \Illuminate\Support\Facades\Cache::put("auto_mist_{$user->id}_{$request->device_id}", 'ON');
                 } elseif ($request->temp < ($targetTemp - 5)) {
+                    // Temp dropped well below target (hysteresis band) → turn OFF
                     $motorStatus->mist    = 'OFF';
                     $motorStatus->exhaust = 'OFF';
                     \Illuminate\Support\Facades\Cache::put("auto_mist_{$user->id}_{$request->device_id}", 'OFF');
                 } else {
-                    // Hysteresis zone — hold previous state
+                    // Hysteresis zone (target-5 to target) — hold previous state to avoid rapid cycling
                     $motorStatus->mist    = $prevMist;
                     $motorStatus->exhaust = $prevMist;
                 }
                 \Log::debug("[Auto Temp Ctrl] Temp={$request->temp} Target={$targetTemp} → Mist={$motorStatus->mist}");
+            } else {
+                // Auto schedule OFF — mist/exhaust are not auto-controlled in Auto mode
+                // Leave mist/exhaust as-is (they stay at whatever the user last set manually)
+                \Log::debug("[Auto Mist] Auto Mist disabled — skipping mist/exhaust control");
             }
 
             $motorStatus->save();
