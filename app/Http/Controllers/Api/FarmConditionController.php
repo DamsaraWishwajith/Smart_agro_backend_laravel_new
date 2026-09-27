@@ -320,6 +320,27 @@ class FarmConditionController extends Controller
 
                 \Log::info("[ESP32 Sync] Power cut & restoration logged. Duration: {$secondsAgo}s");
             }
+
+            // On boot: reset all relay states to OFF in DB to avoid sending a stale 'ON' state
+            // to a freshly booted ESP32 that has all relays physically OFF.
+            if ($user) {
+                $existingMotor = \App\Models\Motor::where('user_id', $user->id)
+                    ->where('device_id', $request->device_id)
+                    ->first();
+                if ($existingMotor) {
+                    $existingMotor->update([
+                        'drip'    => 'OFF',
+                        'mist'    => 'OFF',
+                        'exhaust' => 'OFF',
+                        'light'   => 'OFF',
+                    ]);
+                }
+                // Clear edge-trigger cache so the next schedule check runs fresh
+                \Illuminate\Support\Facades\Cache::forget("drip_sched_{$user->id}_{$request->device_id}");
+                \Illuminate\Support\Facades\Cache::forget("light_sched_{$user->id}_{$request->device_id}");
+                \Illuminate\Support\Facades\Cache::forget("auto_mist_{$user->id}_{$request->device_id}");
+                \Log::info("[ESP32 Boot] All motor states reset to OFF for device {$request->device_id}");
+            }
         }
 
         if ($condition) {
