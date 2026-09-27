@@ -387,6 +387,23 @@ class FarmConditionController extends Controller
                 $this->sendPushNotification($user, 'Drip Irrigation Alert', $request->notify_drip_msg);
             }
         }
+        if ($request->filled('notify_mist_msg')) {
+            $duplicate = EspNotification::where('device_id', $request->device_id)
+                ->where('message', $request->notify_mist_msg)
+                ->where('created_at', '>=', now()->subMinutes(2))
+                ->exists();
+
+            if (!$duplicate) {
+                EspNotification::create([
+                    'user_id' => $user->id,
+                    'device_id' => $request->device_id,
+                    'title' => 'Mist Irrigation Alert',
+                    'message' => $request->notify_mist_msg,
+                    'is_read' => false,
+                ]);
+                $this->sendPushNotification($user, 'Mist Irrigation Alert', $request->notify_mist_msg);
+            }
+        }
 
         // Get plant settings
         $plant = $user->plants()->first();
@@ -445,6 +462,13 @@ class FarmConditionController extends Controller
                 $motorStatus->drip = $expectedDrip;
                 \Illuminate\Support\Facades\Cache::put("drip_sched_{$user->id}_{$request->device_id}", $expectedDrip);
                 \Log::debug("[Edge Trigger] Drip changed to {$expectedDrip}");
+
+                $title = "Drip Irrigation Alert";
+                $body = $expectedDrip === 'ON'
+                    ? "Drip Irrigation System is ON according to your schedule."
+                    : "Drip Irrigation System is OFF (Schedule ended).";
+                \App\Models\EspNotification::create(['user_id' => $user->id, 'device_id' => $request->device_id, 'title' => $title, 'message' => $body, 'is_read' => false]);
+                $this->sendPushNotification($user, $title, $body);
             }
 
             // In Manual Mode, Light is controlled purely by manual switches without schedule overrides.
@@ -472,6 +496,13 @@ class FarmConditionController extends Controller
                     $motorStatus->mist = $expectedMist;
                     $motorStatus->exhaust = $expectedMist;
                     \Illuminate\Support\Facades\Cache::put("mist_sched_{$user->id}_{$request->device_id}", $expectedMist);
+
+                    $title = "Mist & Exhaust Alert";
+                    $body = $expectedMist === 'ON'
+                        ? "Mist Spray & Exhaust Fan are ON (Temp: {$request->temp}°C)."
+                        : "Mist Spray & Exhaust Fan are OFF (Temp: {$request->temp}°C).";
+                    \App\Models\EspNotification::create(['user_id' => $user->id, 'device_id' => $request->device_id, 'title' => $title, 'message' => $body, 'is_read' => false]);
+                    $this->sendPushNotification($user, $title, $body);
                 }
             } else {
             
@@ -499,6 +530,13 @@ class FarmConditionController extends Controller
                     $motorStatus->mist = $expectedMist;
                     $motorStatus->exhaust = $expectedMist;
                     \Illuminate\Support\Facades\Cache::put("mist_sched_{$user->id}_{$request->device_id}", $expectedMist);
+
+                    $title = "Mist & Exhaust Alert";
+                    $body = $expectedMist === 'ON'
+                        ? "Mist Spray & Exhaust Fan are ON according to schedule."
+                        : "Mist Spray & Exhaust Fan are OFF.";
+                    \App\Models\EspNotification::create(['user_id' => $user->id, 'device_id' => $request->device_id, 'title' => $title, 'message' => $body, 'is_read' => false]);
+                    $this->sendPushNotification($user, $title, $body);
                 }
             }
 
@@ -539,6 +577,13 @@ class FarmConditionController extends Controller
                 $motorStatus->save();
                 \Illuminate\Support\Facades\Cache::put("light_sched_{$user->id}_{$request->device_id}", $expectedLight);
                 \Log::debug("[Edge Trigger Auto Mode] Light changed to {$expectedLight}");
+
+                $title = "Grow Light Alert";
+                $body = $expectedLight === 'ON'
+                    ? "Grow Light System is ON according to your Auto Schedule."
+                    : "Grow Light System is OFF (Schedule ended).";
+                \App\Models\EspNotification::create(['user_id' => $user->id, 'device_id' => $request->device_id, 'title' => $title, 'message' => $body, 'is_read' => false]);
+                $this->sendPushNotification($user, $title, $body);
             }
         }
 

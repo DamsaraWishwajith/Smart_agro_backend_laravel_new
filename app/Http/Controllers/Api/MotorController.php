@@ -34,6 +34,11 @@ class MotorController extends Controller
             'device_id' => $request->device_id,
         ]);
 
+        $oldDrip = $motor->drip;
+        $oldMist = $motor->mist;
+        $oldExhaust = $motor->exhaust;
+        $oldLight = $motor->light;
+
         // Update only the fields that are present in the request
         if ($request->has('drip')) $motor->drip = $request->drip;
         if ($request->has('mist')) $motor->mist = $request->mist;
@@ -41,6 +46,40 @@ class MotorController extends Controller
         if ($request->has('light')) $motor->light = $request->light;
 
         $motor->save();
+
+        // Send instant push notifications for manual actuator actions
+        $user = \App\Models\User::find($request->user_id);
+        if ($user) {
+            $device = $request->device_id;
+            if ($request->has('drip') && $oldDrip !== $request->drip) {
+                $status = $request->drip === 'ON' ? 'ON' : 'OFF';
+                $title = "Drip Irrigation Alert";
+                $body = "Drip Irrigation Pump was manually turned {$status}.";
+                \App\Models\EspNotification::create(['user_id' => $user->id, 'device_id' => $device, 'title' => $title, 'message' => $body, 'is_read' => false]);
+                $user->sendPushNotification($title, $body);
+            }
+            if ($request->has('mist') && $oldMist !== $request->mist) {
+                $status = $request->mist === 'ON' ? 'ON' : 'OFF';
+                $title = "Mist Irrigation Alert";
+                $body = "Mist Spray Pump was manually turned {$status}.";
+                \App\Models\EspNotification::create(['user_id' => $user->id, 'device_id' => $device, 'title' => $title, 'message' => $body, 'is_read' => false]);
+                $user->sendPushNotification($title, $body);
+            }
+            if ($request->has('exhaust') && $oldExhaust !== $request->exhaust) {
+                $status = $request->exhaust === 'ON' ? 'ON' : 'OFF';
+                $title = "Exhaust Fan Alert";
+                $body = "Exhaust Ventilation Fan was manually turned {$status}.";
+                \App\Models\EspNotification::create(['user_id' => $user->id, 'device_id' => $device, 'title' => $title, 'message' => $body, 'is_read' => false]);
+                $user->sendPushNotification($title, $body);
+            }
+            if ($request->has('light') && $oldLight !== $request->light) {
+                $status = $request->light === 'ON' ? 'ON' : 'OFF';
+                $title = "Grow Light Alert";
+                $body = "Grow Light was manually turned {$status}.";
+                \App\Models\EspNotification::create(['user_id' => $user->id, 'device_id' => $device, 'title' => $title, 'message' => $body, 'is_read' => false]);
+                $user->sendPushNotification($title, $body);
+            }
+        }
 
         return response()->json([
             'success' => true,
