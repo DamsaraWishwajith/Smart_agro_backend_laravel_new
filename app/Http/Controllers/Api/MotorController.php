@@ -28,6 +28,20 @@ class MotorController extends Controller
             ], 422);
         }
 
+        // Verify if physical IoT device is currently online
+        $condition = \App\Models\FarmCondition::where('device_id', $request->device_id)->latest('updated_at')->first();
+        $isOnline = $condition && $condition->updated_at && $condition->updated_at->diffInSeconds(now()) <= 15;
+
+        // If trying to turn ON any actuator while device is offline, block and reject
+        $isTurningOn = ($request->drip === 'ON') || ($request->mist === 'ON') || ($request->exhaust === 'ON') || ($request->light === 'ON');
+        if (!$isOnline && $isTurningOn) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Device is offline. Please make sure the ESP32 system is powered on before turning on components.',
+                'is_online' => false,
+            ], 400);
+        }
+
         // Find or create the motor record for this physical device
         $motor = Motor::where('device_id', $request->device_id)->first();
         if (!$motor) {
@@ -52,9 +66,9 @@ class MotorController extends Controller
 
         $motor->save();
 
-        // Send instant push notifications for manual actuator actions
+        // Send instant push notifications for manual actuator actions (only when online)
         $user = \App\Models\User::find($request->user_id);
-        if ($user) {
+        if ($user && $isOnline) {
             $device = $request->device_id;
             if ($request->has('drip') && $oldDrip !== $request->drip) {
                 $status = $request->drip === 'ON' ? 'ON' : 'OFF';
@@ -107,7 +121,11 @@ class MotorController extends Controller
             ], 422);
         }
 
-        $motor = Motor::where('user_id', $request->user_id)->first();
+        $user = \App\Models\User::find($request->user_id);
+        $deviceId = $request->device_id ?? ($user ? $user->device_id : null);
+
+        $motor = Motor::where('device_id', $deviceId)->latest('updated_at')->first()
+              ?? Motor::where('user_id', $request->user_id)->latest('updated_at')->first();
 
         if (!$motor) {
             return response()->json([
@@ -116,9 +134,21 @@ class MotorController extends Controller
             ], 404);
         }
 
+        $condition = $deviceId ? \App\Models\FarmCondition::where('device_id', $deviceId)->latest('updated_at')->first() : null;
+        $isOnline = $condition && $condition->updated_at && $condition->updated_at->diffInSeconds(now()) <= 15;
+
+        $data = $motor->toArray();
+        if (!$isOnline) {
+            $data['drip'] = 'OFF';
+            $data['mist'] = 'OFF';
+            $data['exhaust'] = 'OFF';
+            $data['light'] = 'OFF';
+        }
+
         return response()->json([
             'success' => true,
-            'data' => $motor
+            'is_online' => (bool)$isOnline,
+            'data' => $data
         ]);
     }
 }

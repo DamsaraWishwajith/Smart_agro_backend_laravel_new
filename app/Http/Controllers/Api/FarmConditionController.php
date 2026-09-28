@@ -243,7 +243,7 @@ class FarmConditionController extends Controller
                     'water_need_ml'      => $plant->water_need_ml,
                     'updated_at'         => $plant->updated_at->toDateTimeString(),
                 ] : null,
-                'motors' => $motor ? [
+                'motors' => ($motor && $isOnline) ? [
                     'drip'       => $motor->drip,
                     'mist'       => $motor->mist,
                     'exhaust'    => $motor->exhaust,
@@ -254,7 +254,7 @@ class FarmConditionController extends Controller
                     'mist'       => 'OFF',
                     'exhaust'    => 'OFF',
                     'light'      => 'OFF',
-                    'updated_at' => null,
+                    'updated_at' => $motor ? $motor->updated_at->toDateTimeString() : null,
                 ]
             ]
         ]);
