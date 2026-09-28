@@ -37,7 +37,7 @@ class MotorController extends Controller
         if (!$isOnline && $isTurningOn) {
             return response()->json([
                 'success' => false,
-                'message' => 'Device is offline. Please make sure the ESP32 system is powered on before turning on components.',
+                'message' => 'Device is offline. Please make sure the Smart Agro device is powered on before turning on components.',
                 'is_online' => false,
             ], 400);
         }
