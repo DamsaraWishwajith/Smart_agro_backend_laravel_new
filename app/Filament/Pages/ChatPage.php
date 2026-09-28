@@ -31,6 +31,12 @@ class ChatPage extends Page
 
     public function mount(): void
     {
+        if ($userId = request()->query('user_id')) {
+            $this->selectedUserId = (int) $userId;
+            $this->markUserMessagesAsRead($this->selectedUserId);
+            return;
+        }
+
         // Auto-select first user with messages, if any
         $firstUser = User::has('messages')->orderByDesc('updated_at')->first();
         if ($firstUser) {

@@ -103,24 +103,32 @@ class UserResource extends Resource
                     ->label('Chat')
                     ->icon('heroicon-o-chat-bubble-left-right')
                     ->color('warning')
-                    ->slideOver()
-                    ->modalWidth('lg')
-                    ->modalSubmitAction(false)
-                    ->modalCancelActionLabel('Close')
-                    ->modalContent(fn (\App\Models\User $record) => view('filament.pages.chat-modal', ['user' => $record])),
+                    ->url(fn (\App\Models\User $record): string => url('/admin/chat-page?user_id=' . $record->id)),
                 Tables\Actions\Action::make('approve')
                     ->label('Approve')
                     ->icon('heroicon-o-check-circle')
                     ->color('success')
-                    ->action(fn (\App\Models\User $record) => $record->update(['status' => 'approved']))
                     ->requiresConfirmation()
+                    ->modalHeading('Approve User')
+                    ->modalDescription('Are you sure you want to approve this user account?')
+                    ->modalSubmitActionLabel('Yes, Approve')
+                    ->successNotificationTitle('User approved successfully')
+                    ->action(function (\App\Models\User $record) {
+                        $record->update(['status' => 'approved']);
+                    })
                     ->hidden(fn (\App\Models\User $record): bool => $record->status === 'approved'),
                 Tables\Actions\Action::make('deny')
                     ->label('Deny')
                     ->icon('heroicon-o-x-circle')
                     ->color('danger')
-                    ->action(fn (\App\Models\User $record) => $record->update(['status' => 'denied']))
                     ->requiresConfirmation()
+                    ->modalHeading('Deny User')
+                    ->modalDescription('Are you sure you want to deny this user account?')
+                    ->modalSubmitActionLabel('Yes, Deny')
+                    ->successNotificationTitle('User denied successfully')
+                    ->action(function (\App\Models\User $record) {
+                        $record->update(['status' => 'denied']);
+                    })
                     ->hidden(fn (\App\Models\User $record): bool => $record->status === 'denied'),
                 Tables\Actions\ViewAction::make(),
                 Tables\Actions\EditAction::make(),
