@@ -5,6 +5,9 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use App\Models\Mode;
+use App\Models\Motor;
+use App\Models\User;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Validator;
 
 use Illuminate\Support\Facades\Schema;
@@ -63,6 +66,17 @@ class ModeController extends Controller
             ['user_id' => $request->user_id],
             $updateData
         );
+
+        if ($request->has('mode') && strtoupper($request->mode) === 'MANUAL') {
+            Motor::where('user_id', $request->user_id)->update([
+                'mist' => 'OFF',
+                'exhaust' => 'OFF',
+            ]);
+            $user = User::find($request->user_id);
+            if ($user && $user->device_id) {
+                Cache::forget("mist_sched_{$user->id}_{$user->device_id}");
+            }
+        }
 
         return response()->json([
             'success' => true,

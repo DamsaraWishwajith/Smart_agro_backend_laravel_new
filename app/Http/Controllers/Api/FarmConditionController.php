@@ -467,72 +467,14 @@ class FarmConditionController extends Controller
                 $this->sendPushNotification($user, $title, $body);
             }
 
-            // In Manual Mode, Light is controlled purely by manual switches without schedule overrides.
-
-            // 3. Mist & Exhaust control
-            $mistSchedulesCount = \App\Models\IrrigationSchedule::where('user_id', $user->id)
-                ->where('system_type', 'mist')
-                ->count();
-            $mistTimeVal = $mistSchedulesCount > 0 ? 1 : 0;
-
-            if ($mistTimeVal === 0) {
-                // Sensor-threshold mode for Mist (Edge-triggered to allow manual overrides)
-                $targetTemp = $plant ? ($plant->temperature ?? 30) : 30;
-                $expectedMist = 'OFF';
-                if ($request->temp >= $targetTemp) {
-                    $expectedMist = 'ON';
-                } else if ($request->temp < ($targetTemp - 5)) {
-                    $expectedMist = 'OFF';
-                } else {
-                    $expectedMist = \Illuminate\Support\Facades\Cache::get("mist_sched_{$user->id}_{$request->device_id}", 'OFF');
-                }
-                
-                $prevMist = \Illuminate\Support\Facades\Cache::get("mist_sched_{$user->id}_{$request->device_id}", 'OFF');
-                if ($expectedMist !== $prevMist) {
-                    $motorStatus->mist = $expectedMist;
-                    $motorStatus->exhaust = $expectedMist;
-                    \Illuminate\Support\Facades\Cache::put("mist_sched_{$user->id}_{$request->device_id}", $expectedMist);
-
-                    $title = "Mist & Exhaust Alert";
-                    $body = $expectedMist === 'ON'
-                        ? "Mist Spray & Exhaust Fan are ON (Temp: {$request->temp}°C)."
-                        : "Mist Spray & Exhaust Fan are OFF (Temp: {$request->temp}°C).";
-                    \App\Models\EspNotification::create(['user_id' => $user->id, 'device_id' => $request->device_id, 'title' => $title, 'message' => $body, 'is_read' => false]);
-                    $this->sendPushNotification($user, $title, $body);
-                }
-            } else {
-            
-                // Timer mode
-                $mistSchedules = \App\Models\IrrigationSchedule::where('user_id', $user->id)
-                    ->where('system_type', 'mist')
-                    ->get();
-                $isMistScheduled = false;
-                foreach ($mistSchedules as $schedule) {
-                    $days = $schedule->days;
-                    $scheduleDays = is_array($days) ? $days : json_decode($days, true);
-                    if ($scheduleDays && in_array($currentDay, $scheduleDays)) {
-                        if ($currentTime >= $schedule->on_time && $currentTime <= $schedule->off_time) {
-                            $isMistScheduled = true;
-                            break;
-                        }
-                    }
-                }
-                
-                $targetTemp = $plant ? ($plant->temperature ?? 30) : 30;
-                // Only turn ON if schedule is active AND current temperature >= target temperature (rainy/cool day protection)
-                $expectedMist = ($isMistScheduled && $request->temp >= $targetTemp) ? 'ON' : 'OFF';
-                $prevMist = \Illuminate\Support\Facades\Cache::get("mist_sched_{$user->id}_{$request->device_id}", 'OFF');
-                if ($expectedMist !== $prevMist) {
-                    $motorStatus->mist = $expectedMist;
-                    $motorStatus->exhaust = $expectedMist;
-                    \Illuminate\Support\Facades\Cache::put("mist_sched_{$user->id}_{$request->device_id}", $expectedMist);
-
-                    $title = "Mist & Exhaust Alert";
-                    $body = $expectedMist === 'ON'
-                        ? "Mist Spray & Exhaust Fan are ON according to schedule."
-                        : "Mist Spray & Exhaust Fan are OFF.";
-                    \App\Models\EspNotification::create(['user_id' => $user->id, 'device_id' => $request->device_id, 'title' => $title, 'message' => $body, 'is_read' => false]);
-                    $this->sendPushNotification($user, $title, $body);
+            // In Manual Mode, Mist, Exhaust, and Light are controlled purely by manual switches without automated temperature or schedule overrides.
+            // Clear any leftover cache from previous automated runs and ensure residual mist/exhaust states are reset to OFF.
+            if (\Illuminate\Support\Facades\Cache::has("mist_sched_{$user->id}_{$request->device_id}")) {
+                \Illuminate\Support\Facades\Cache::forget("mist_sched_{$user->id}_{$request->device_id}");
+                if ($motorStatus->mist === 'ON' || $motorStatus->exhaust === 'ON') {
+                    $motorStatus->mist = 'OFF';
+                    $motorStatus->exhaust = 'OFF';
+                    \Log::info("[ESP32 Sync] Reset residual automatic mist/exhaust to OFF in Manual Mode for device {$request->device_id}");
                 }
             }
 
