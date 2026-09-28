@@ -49,7 +49,10 @@ class FarmConditionController extends Controller
         }
 
         // Find the user associated with this device ID
-        $user = User::where('device_id', $request->device_id)->first();
+        $user = User::where('device_id', $request->device_id)
+            ->where('status', 'approved')
+            ->latest('id')
+            ->first() ?? User::where('device_id', $request->device_id)->first();
         
         $modeStr = 'MANUAL';
         $motors = [
@@ -281,7 +284,10 @@ class FarmConditionController extends Controller
         $condition = FarmCondition::where('device_id', $request->device_id)->first();
 
         // Find associated user
-        $user = User::where('device_id', $request->device_id)->first();
+        $user = User::where('device_id', $request->device_id)
+            ->where('status', 'approved')
+            ->latest('id')
+            ->first() ?? User::where('device_id', $request->device_id)->first();
 
         // If ESP32 is reporting a boot (startup), calculate power cut/restored times
         if ($request->input('boot') == 1 && $condition) {
@@ -412,11 +418,15 @@ class FarmConditionController extends Controller
         $modeModel = \App\Models\Mode::where('user_id', $user->id)->first();
         $modeStr = ($modeModel && strtolower($modeModel->mode) === 'auto') ? 'Auto' : 'Manual';
 
-        // Get or create Motor status
-        $motorStatus = Motor::firstOrCreate(
-            ['user_id' => $user->id, 'device_id' => $request->device_id],
-            ['drip' => 'OFF', 'mist' => 'OFF', 'exhaust' => 'OFF', 'light' => 'OFF']
-        );
+        // Get or create Motor status for this physical device
+        $motorStatus = Motor::where('device_id', $request->device_id)->latest('updated_at')->first();
+        if (!$motorStatus) {
+            $motorStatus = Motor::create([
+                'user_id' => $user ? $user->id : 1,
+                'device_id' => $request->device_id,
+                'drip' => 'OFF', 'mist' => 'OFF', 'exhaust' => 'OFF', 'light' => 'OFF'
+            ]);
+        }
 
         // Process User-Defined Schedules with Edge-Triggering (Cache) ONLY in Manual Mode
         if ($modeStr === 'Manual') {

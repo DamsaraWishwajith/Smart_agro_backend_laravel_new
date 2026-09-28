@@ -28,11 +28,16 @@ class MotorController extends Controller
             ], 422);
         }
 
-        // Find or create the motor record for this user and device
-        $motor = Motor::firstOrNew([
-            'user_id' => $request->user_id,
-            'device_id' => $request->device_id,
-        ]);
+        // Find or create the motor record for this physical device
+        $motor = Motor::where('device_id', $request->device_id)->first();
+        if (!$motor) {
+            $motor = new Motor([
+                'device_id' => $request->device_id,
+                'user_id' => $request->user_id,
+            ]);
+        } else {
+            $motor->user_id = $request->user_id;
+        }
 
         $oldDrip = $motor->drip;
         $oldMist = $motor->mist;

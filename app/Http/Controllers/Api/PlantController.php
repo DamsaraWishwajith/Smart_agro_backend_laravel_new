@@ -228,7 +228,10 @@ class PlantController extends Controller
             ], 422);
         }
 
-        $user = User::where('device_id', $request->device_id)->first();
+        $user = User::where('device_id', $request->device_id)
+            ->where('status', 'approved')
+            ->latest('id')
+            ->first() ?? User::where('device_id', $request->device_id)->first();
 
         if (!$user) {
             return response()->json([
