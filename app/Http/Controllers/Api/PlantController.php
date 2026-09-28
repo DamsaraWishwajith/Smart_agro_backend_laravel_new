@@ -229,13 +229,6 @@ class PlantController extends Controller
         }
 
         $user = User::where('device_id', $request->device_id)->first();
-        if (!$user) {
-            $user = User::first();
-            if ($user) {
-                $user->device_id = $request->device_id;
-                $user->save();
-            }
-        }
 
         if (!$user) {
             return response()->json([

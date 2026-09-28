@@ -50,13 +50,6 @@ class FarmConditionController extends Controller
 
         // Find the user associated with this device ID
         $user = User::where('device_id', $request->device_id)->first();
-        if (!$user) {
-            $user = User::first();
-            if ($user) {
-                $user->device_id = $request->device_id;
-                $user->save();
-            }
-        }
         
         $modeStr = 'MANUAL';
         $motors = [
@@ -289,13 +282,6 @@ class FarmConditionController extends Controller
 
         // Find associated user
         $user = User::where('device_id', $request->device_id)->first();
-        if (!$user) {
-            $user = User::first();
-            if ($user) {
-                $user->device_id = $request->device_id;
-                $user->save();
-            }
-        }
 
         // If ESP32 is reporting a boot (startup), calculate power cut/restored times
         if ($request->input('boot') == 1 && $condition) {
